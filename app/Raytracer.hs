@@ -7,6 +7,7 @@ module Raytracer (
     Object (..),
     Scene (..),
     Color,
+    Material (..),
 ) where
 
 import Data.Function (on)
@@ -29,7 +30,17 @@ data Light
     = DirectionalLight Vec3 Color
     deriving (Show)
 
-data Object = Sphere Vec3 Double Color deriving (Show)
+data Object = Sphere Vec3 Double Material deriving (Show)
+
+-- https://en.wikipedia.org/wiki/Phong_reflection_model
+data Material = Material
+    { color :: Color
+    , specular :: Double -- ks
+    , diffuse :: Double -- kd
+    -- , ambient :: Double -- ka
+    , shininess :: Double -- alpha
+    }
+    deriving (Show)
 
 data Scene = Scene
     { camera :: Camera
@@ -97,15 +108,18 @@ renderRay ray scene =
     case closestIntersection ray scene.objects of
         Nothing -> (0, 0, 0)
         Just (s, (_eyeDist, intersectionPoint, surfaceNormal)) ->
-            foldl' (addLight (sphereColor s, intersectionPoint, surfaceNormal)) scene.ambientLight scene.lights
-  where
-    sphereColor (Sphere _ _ c) = c
+            let
+                lightContrib :: Light -> Color
+                lightContrib = phong ray intersectionPoint surfaceNormal (sphereMaterial s)
 
-addLight :: (Color, Vec3, Vec3) -> Color -> Light -> Color
-addLight (materialColor, _surfacePoint, surfaceNormal) acc light =
-    acc `plus` case light of
-        DirectionalLight direction lightColor ->
-            diffuse direction lightColor materialColor surfaceNormal -- TODO use light color
+                contributons :: [Color]
+                contributons = fmap lightContrib scene.lights
+             in
+                foldl' plus scene.ambientLight contributons
+  where
+    sphereMaterial (Sphere _ _ m) = m
+
+-- (Line _eye rayDir) surfacePoint surfaceNormal material ambientColor light
 
 -- https://en.wikipedia.org/wiki/Line%E2%80%93sphere_intersection
 lineSphereIntersection :: Line -> Object -> Maybe (Double, Vec3, Vec3)
@@ -132,5 +146,28 @@ closestIntersection line spheres =
   where
     distance (_, (d, _, _)) = d
 
-diffuse :: Vec3 -> Vec3 -> Vec3 -> Vec3 -> Vec3
-diffuse light lightColor surfaceColor normal = hadamard lightColor $ surfaceColor `scaledBy` max 0 (min 1 (-(normal `dot` light)))
+-- https://en.wikipedia.org/wiki/Phong_reflection_model
+phong :: Line -> Vec3 -> Vec3 -> Material -> Light -> Color
+phong (Line _eye rayDir) surfacePoint surfaceNormal material light =
+    case light of
+        DirectionalLight dir lightColor ->
+            let
+                l = negate dir
+                n = surfaceNormal
+                v = negate rayDir
+                r = (n `scaledBy` (2 * (l `dot` n))) `minus` l
+
+                diffuseDot = (l `dot` n)
+                diffuse =
+                    if diffuseDot > 0
+                        then material.diffuse * diffuseDot
+                        else 0
+
+                specularDot = (r `dot` v)
+                specular =
+                    if specularDot > 0 && diffuseDot > 0
+                        then material.specular * (specularDot ** material.shininess)
+                        else 0
+             in
+                hadamard material.color (lightColor `scaledBy` diffuse)
+                    `plus` (lightColor `scaledBy` specular)
