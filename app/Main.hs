@@ -35,7 +35,7 @@ w, h :: Int
 w = 600
 h = 600
 
-material1, material2, material3 :: Material
+material1, material2, material3, materialPlane :: Material
 material1 =
     Material
         { color = (1, 0.7, 0.1)
@@ -45,6 +45,13 @@ material1 =
         }
 material2 = material1{color = (0.8, 0.1, 1)}
 material3 = material1{color = (0.1, 1, 0.7)}
+materialPlane =
+    Material
+        { color = (0.4, 0.7, 0.1)
+        , specular = 1
+        , diffuse = 0.2
+        , shininess = 3
+        }
 
 myImage :: [Pxl]
 myImage =
@@ -66,6 +73,7 @@ myImage =
                 [ Sphere (0, 0, 3) 0.6 material1
                 , Sphere (-1, 0.3, 3) 1 material2
                 , Sphere (1, -0.3, 3) 1 material3
+                , Plane (0, -0.8, 0) (normalize (0, 1, 0)) materialPlane
                 ]
             }
 

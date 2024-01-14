@@ -30,7 +30,10 @@ data Light
     = DirectionalLight Vec3 Color
     deriving (Show)
 
-data Object = Sphere Vec3 Double Material deriving (Show)
+data Object
+    = Sphere Vec3 Double Material
+    | Plane Vec3 Vec3 Material
+    deriving (Show)
 
 -- https://en.wikipedia.org/wiki/Phong_reflection_model
 data Material = Material
@@ -110,20 +113,27 @@ renderRay ray scene =
         Just (s, (_eyeDist, intersectionPoint, surfaceNormal)) ->
             let
                 lightContrib :: Light -> Color
-                lightContrib = phong ray intersectionPoint surfaceNormal (sphereMaterial s)
+                lightContrib = phong ray intersectionPoint surfaceNormal (objMaterial s)
 
                 contributons :: [Color]
                 contributons = fmap lightContrib scene.lights
              in
                 foldl' plus scene.ambientLight contributons
   where
-    sphereMaterial (Sphere _ _ m) = m
+    objMaterial (Sphere _ _ m) = m
+    objMaterial (Plane _ _ m) = m
 
 -- (Line _eye rayDir) surfacePoint surfaceNormal material ambientColor light
 
+findIntersection :: Line -> Object -> Maybe (Double, Vec3, Vec3)
+findIntersection line obj =
+    case obj of
+        Sphere center radius _ -> lineSphereIntersection line center radius
+        Plane center normal _ -> linePlaneIntersection line center normal
+
 -- https://en.wikipedia.org/wiki/Line%E2%80%93sphere_intersection
-lineSphereIntersection :: Line -> Object -> Maybe (Double, Vec3, Vec3)
-lineSphereIntersection (Line o un) (Sphere c r _)
+lineSphereIntersection :: Line -> Vec3 -> Double -> Maybe (Double, Vec3, Vec3)
+lineSphereIntersection (Line o un) c r
     | delta < 0 = Nothing
     | delta > 0 = Just (d1, i1, n1) -- two intersections, choose first
     | otherwise = Just (d1, i1, n1) -- one intersection
@@ -139,12 +149,22 @@ lineSphereIntersection (Line o un) (Sphere c r _)
     n2 = normalize $ i2 `minus` c
 
 closestIntersection :: Line -> [Object] -> Maybe (Object, (Double, Vec3, Vec3))
-closestIntersection line spheres =
+closestIntersection line objects =
     listToMaybe $
         sortBy (compare `on` distance) $
-            mapMaybe (\s -> fmap (s,) (lineSphereIntersection line s)) spheres
+            mapMaybe (\s -> fmap (s,) (findIntersection line s)) objects
   where
     distance (_, (d, _, _)) = d
+
+-- https://en.wikipedia.org/wiki/Line%E2%80%93plane_intersection
+linePlaneIntersection :: Line -> Vec3 -> Vec3 -> Maybe (Double, Vec3, Vec3)
+linePlaneIntersection (Line l0 l) p0 n
+    | ln == 0 = Nothing -- line and plane are parallell
+    | d < 0 = Nothing -- intersection is behind eye
+    | otherwise = Just (d, l0 `plus` (l `scaledBy` d), n)
+  where
+    ln = l `dot` n
+    d = ((p0 `minus` l0) `dot` n) / ln
 
 -- https://en.wikipedia.org/wiki/Phong_reflection_model
 phong :: Line -> Vec3 -> Vec3 -> Material -> Light -> Color
