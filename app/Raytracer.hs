@@ -113,7 +113,7 @@ renderRay ray scene =
         Just (s, (_eyeDist, intersectionPoint, surfaceNormal)) ->
             let
                 lightContrib :: Light -> Color
-                lightContrib = phong ray intersectionPoint surfaceNormal (objMaterial s)
+                lightContrib = phong ray scene.objects intersectionPoint surfaceNormal (objMaterial s)
 
                 contributons :: [Color]
                 contributons = fmap lightContrib scene.lights
@@ -125,18 +125,18 @@ renderRay ray scene =
 
 -- (Line _eye rayDir) surfacePoint surfaceNormal material ambientColor light
 
-findIntersection :: Line -> Object -> Maybe (Double, Vec3, Vec3)
+findIntersection :: Line -> Object -> [(Double, Vec3, Vec3)]
 findIntersection line obj =
     case obj of
         Sphere center radius _ -> lineSphereIntersection line center radius
         Plane center normal _ -> linePlaneIntersection line center normal
 
 -- https://en.wikipedia.org/wiki/Line%E2%80%93sphere_intersection
-lineSphereIntersection :: Line -> Vec3 -> Double -> Maybe (Double, Vec3, Vec3)
+lineSphereIntersection :: Line -> Vec3 -> Double -> [(Double, Vec3, Vec3)]
 lineSphereIntersection (Line o un) c r
-    | delta < 0 = Nothing
-    | delta > 0 = Just (d1, i1, n1) -- two intersections, choose first
-    | otherwise = Just (d1, i1, n1) -- one intersection
+    | delta < 0 = []
+    | delta > 0 = [(d1, i1, n1), (d2, i2, n2)] -- two intersections
+    | otherwise = [(d1, i1, n1)] -- one intersection
   where
     a = un `dot` (o `minus` c)
     b = magnitude (o `minus` c)
@@ -152,26 +152,31 @@ closestIntersection :: Line -> [Object] -> Maybe (Object, (Double, Vec3, Vec3))
 closestIntersection line objects =
     listToMaybe $
         sortBy (compare `on` distance) $
-            mapMaybe (\s -> fmap (s,) (findIntersection line s)) objects
+            filter (\x -> distance x > 0) $
+                concatMap (\s -> fmap (s,) (findIntersection line s)) objects
   where
     distance (_, (d, _, _)) = d
 
 -- https://en.wikipedia.org/wiki/Line%E2%80%93plane_intersection
-linePlaneIntersection :: Line -> Vec3 -> Vec3 -> Maybe (Double, Vec3, Vec3)
+linePlaneIntersection :: Line -> Vec3 -> Vec3 -> [(Double, Vec3, Vec3)]
 linePlaneIntersection (Line l0 l) p0 n
-    | ln == 0 = Nothing -- line and plane are parallell
-    | d < 0 = Nothing -- intersection is behind eye
-    | otherwise = Just (d, l0 `plus` (l `scaledBy` d), n)
+    | ln == 0 = [] -- line and plane are parallell
+    | otherwise = [(d, l0 `plus` (l `scaledBy` d), n)]
   where
     ln = l `dot` n
     d = ((p0 `minus` l0) `dot` n) / ln
 
 -- https://en.wikipedia.org/wiki/Phong_reflection_model
-phong :: Line -> Vec3 -> Vec3 -> Material -> Light -> Color
-phong (Line _eye rayDir) surfacePoint surfaceNormal material light =
+phong :: Line -> [Object] -> Vec3 -> Vec3 -> Material -> Light -> Color
+phong ray objects surfacePoint surfaceNormal material light =
     case light of
         DirectionalLight dir lightColor ->
             let
+                shadow = case closestIntersection (Line (surfacePoint `plus` (surfaceNormal `scaledBy` 0.001)) (negate dir)) objects of
+                    Just _ -> True
+                    Nothing -> False
+
+                (Line _eye rayDir) = ray
                 l = negate dir
                 n = surfaceNormal
                 v = negate rayDir
@@ -179,13 +184,13 @@ phong (Line _eye rayDir) surfacePoint surfaceNormal material light =
 
                 diffuseDot = (l `dot` n)
                 diffuse =
-                    if diffuseDot > 0
+                    if diffuseDot > 0 && not shadow
                         then material.diffuse * diffuseDot
                         else 0
 
                 specularDot = (r `dot` v)
                 specular =
-                    if specularDot > 0 && diffuseDot > 0
+                    if specularDot > 0 && diffuseDot > 0 && not shadow
                         then material.specular * (specularDot ** material.shininess)
                         else 0
              in
