@@ -1,4 +1,6 @@
+{-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE OverloadedRecordDot #-}
+{-# LANGUAGE NoFieldSelectors #-}
 
 module Raytracer (
     renderScene,
@@ -12,7 +14,7 @@ module Raytracer (
 
 import Data.Function (on)
 import Data.List (foldl', sortBy)
-import Data.Maybe (listToMaybe, mapMaybe)
+import Data.Maybe (listToMaybe)
 import Vec3
 import Prelude hiding (negate)
 
@@ -110,10 +112,10 @@ renderRay :: Line -> Scene -> Color
 renderRay ray scene =
     case closestIntersection ray scene.objects of
         Nothing -> (0, 0, 0)
-        Just (s, (_eyeDist, intersectionPoint, surfaceNormal)) ->
+        Just hit ->
             let
                 lightContrib :: Light -> Color
-                lightContrib = phong ray scene.objects intersectionPoint surfaceNormal (objMaterial s)
+                lightContrib = phong ray scene.objects hit.point hit.normal (objMaterial hit.object)
 
                 contributons :: [Color]
                 contributons = fmap lightContrib scene.lights
@@ -125,11 +127,13 @@ renderRay ray scene =
 
 -- (Line _eye rayDir) surfacePoint surfaceNormal material ambientColor light
 
-findIntersection :: Line -> Object -> [(Double, Vec3, Vec3)]
+findIntersection :: Line -> Object -> [Hit]
 findIntersection line obj =
     case obj of
-        Sphere center radius _ -> lineSphereIntersection line center radius
-        Plane center normal _ -> linePlaneIntersection line center normal
+        Sphere center radius _ -> hitObject <$> lineSphereIntersection line center radius
+        Plane center normal _ -> hitObject <$> linePlaneIntersection line center normal
+  where
+    hitObject (d, i, n) = Hit obj d i n
 
 -- https://en.wikipedia.org/wiki/Line%E2%80%93sphere_intersection
 lineSphereIntersection :: Line -> Vec3 -> Double -> [(Double, Vec3, Vec3)]
@@ -148,14 +152,20 @@ lineSphereIntersection (Line o un) c r
     i2 = o `plus` (un `scaledBy` d2)
     n2 = normalize $ i2 `minus` c
 
-closestIntersection :: Line -> [Object] -> Maybe (Object, (Double, Vec3, Vec3))
+data Hit = Hit
+    { object :: Object
+    , distance :: Double
+    , point :: Vec3
+    , normal :: Vec3
+    }
+closestIntersection :: Line -> [Object] -> Maybe Hit
 closestIntersection line objects =
     listToMaybe $
         sortBy (compare `on` distance) $
-            filter (\x -> distance x > 0) $
-                concatMap (\s -> fmap (s,) (findIntersection line s)) objects
+            concatMap (filter positiveDistance . findIntersection line) objects
   where
-    distance (_, (d, _, _)) = d
+    distance hit = hit.distance
+    positiveDistance hit = hit.distance > 0
 
 -- https://en.wikipedia.org/wiki/Line%E2%80%93plane_intersection
 linePlaneIntersection :: Line -> Vec3 -> Vec3 -> [(Double, Vec3, Vec3)]
