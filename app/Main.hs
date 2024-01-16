@@ -59,11 +59,12 @@ myImage =
         Raytracer.Scene
             { camera =
                 Camera
-                    { eye = (0, 0, 0)
-                    , target = (0, 0, 1)
-                    , fieldOfView = pi / 2 :: Double
+                    { eye = (4, 4, -4)
+                    , target = (0, 0, 0)
+                    , fieldOfView = pi / 4 :: Double
                     , up = (0, 1, 0)
                     }
+            , background = (0, 0.1, 0)
             , ambientLight = (0.0, 0.0, 0.0)
             , lights =
                 [ DirectionalLight (normalize (1, -3, 0.5)) (1, 1, 1)
@@ -71,10 +72,10 @@ myImage =
                 , DirectionalLight (normalize (2, -1, 1)) (1, 1, 0.5)
                 ]
             , objects =
-                [ Sphere (0, 0, 3) 0.6 material1
-                , Sphere (-1, 0.3, 3) 1 material2
-                , Sphere (1, -0.3, 3) 1 material3
-                , Plane (0, -1.2, 0) (normalize (0, 1, 0)) materialPlane
+                [ Sphere (0, 0, 0) 0.6 material1
+                , Sphere (-1, 0.3, 0) 1 material2
+                , Sphere (1, -0.3, 0) 1 material3
+                , Disc (0, -1.2, 0) (normalize (0, 1, 0)) 3 materialPlane
                 ]
             }
 

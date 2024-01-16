@@ -35,6 +35,7 @@ data Light
 data Object
     = Sphere Vec3 Double Material
     | Plane Vec3 Vec3 Material
+    | Disc Vec3 Vec3 Double Material
     deriving (Show)
 
 -- https://en.wikipedia.org/wiki/Phong_reflection_model
@@ -49,6 +50,7 @@ data Material = Material
 
 data Scene = Scene
     { camera :: Camera
+    , background :: Color
     , ambientLight :: Color
     , lights :: [Light]
     , objects :: [Object]
@@ -61,9 +63,9 @@ renderScene :: Int -> Int -> Scene -> [Color]
 renderScene width height scene =
     let
         -- https://en.wikipedia.org/wiki/Ray_tracing_(graphics)
-        pE = (0, 0, 0) :: Vec3
-        pT = (0, 0, 1) :: Vec3
-        fov = pi / 2 :: Double
+        pE = scene.camera.eye
+        pT = scene.camera.target
+        fov = scene.camera.fieldOfView
         v = scene.camera.up
 
         k :: Int
@@ -111,7 +113,7 @@ renderScene width height scene =
 renderRay :: Line -> Scene -> Color
 renderRay ray scene =
     case closestIntersection ray scene.objects of
-        Nothing -> (0, 0, 0)
+        Nothing -> scene.background
         Just hit ->
             let
                 lightContrib :: Light -> Color
@@ -124,6 +126,7 @@ renderRay ray scene =
   where
     objMaterial (Sphere _ _ m) = m
     objMaterial (Plane _ _ m) = m
+    objMaterial (Disc _ _ _ m) = m
 
 -- (Line _eye rayDir) surfacePoint surfaceNormal material ambientColor light
 
@@ -132,6 +135,7 @@ findIntersection line obj =
     case obj of
         Sphere center radius _ -> hitObject <$> lineSphereIntersection line center radius
         Plane center normal _ -> hitObject <$> linePlaneIntersection line center normal
+        Disc center normal radius _ -> hitObject <$> lineDiscIntersection line center normal radius
   where
     hitObject (d, i, n) = Hit obj d i n
 
@@ -175,6 +179,11 @@ linePlaneIntersection (Line l0 l) p0 n
   where
     ln = l `dot` n
     d = ((p0 `minus` l0) `dot` n) / ln
+
+lineDiscIntersection :: Line -> Vec3 -> Vec3 -> Double -> [(Double, Vec3, Vec3)]
+lineDiscIntersection l p0 n radius = filter inside $ linePlaneIntersection l p0 n
+  where
+    inside (_, hitPoint, _) = magnitude (hitPoint `minus` p0) <= radius
 
 -- https://en.wikipedia.org/wiki/Phong_reflection_model
 phong :: Line -> [Object] -> Vec3 -> Vec3 -> Material -> Light -> Color
