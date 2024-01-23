@@ -57,7 +57,7 @@ data Scene = Scene
     }
     deriving (Show)
 
-data Line = Line Vec3 Vec3 deriving (Show)
+data Ray = Ray Vec3 Vec3 deriving (Show)
 
 renderScene :: Int -> Int -> Scene -> [Color]
 renderScene width height scene =
@@ -107,10 +107,10 @@ renderScene width height scene =
         do
             y <- [1 .. m]
             x <- [1 .. k]
-            let ray = Line pE (normalize $ pij x y)
+            let ray = Ray pE (normalize $ pij x y)
             pure $ renderRay ray scene
 
-renderRay :: Line -> Scene -> Color
+renderRay :: Ray -> Scene -> Color
 renderRay ray scene =
     case closestIntersection ray scene.objects of
         Nothing -> scene.background
@@ -128,9 +128,9 @@ renderRay ray scene =
     objMaterial (Plane _ _ m) = m
     objMaterial (Disc _ _ _ m) = m
 
--- (Line _eye rayDir) surfacePoint surfaceNormal material ambientColor light
+-- (Ray _eye rayDir) surfacePoint surfaceNormal material ambientColor light
 
-findIntersection :: Line -> Object -> [Hit]
+findIntersection :: Ray -> Object -> [Hit]
 findIntersection line obj =
     case obj of
         Sphere center radius _ -> hitObject <$> lineSphereIntersection line center radius
@@ -140,8 +140,8 @@ findIntersection line obj =
     hitObject (d, i, n) = Hit obj d i n
 
 -- https://en.wikipedia.org/wiki/Line%E2%80%93sphere_intersection
-lineSphereIntersection :: Line -> Vec3 -> Double -> [(Double, Vec3, Vec3)]
-lineSphereIntersection (Line o un) c r
+lineSphereIntersection :: Ray -> Vec3 -> Double -> [(Double, Vec3, Vec3)]
+lineSphereIntersection (Ray o un) c r
     | delta < 0 = []
     | delta > 0 = [(d1, i1, n1), (d2, i2, n2)] -- two intersections
     | otherwise = [(d1, i1, n1)] -- one intersection
@@ -162,7 +162,7 @@ data Hit = Hit
     , point :: Vec3
     , normal :: Vec3
     }
-closestIntersection :: Line -> [Object] -> Maybe Hit
+closestIntersection :: Ray -> [Object] -> Maybe Hit
 closestIntersection line objects =
     listToMaybe $
         sortBy (compare `on` distance) $
@@ -172,30 +172,30 @@ closestIntersection line objects =
     positiveDistance hit = hit.distance > 0
 
 -- https://en.wikipedia.org/wiki/Line%E2%80%93plane_intersection
-linePlaneIntersection :: Line -> Vec3 -> Vec3 -> [(Double, Vec3, Vec3)]
-linePlaneIntersection (Line l0 l) p0 n
+linePlaneIntersection :: Ray -> Vec3 -> Vec3 -> [(Double, Vec3, Vec3)]
+linePlaneIntersection (Ray l0 l) p0 n
     | ln == 0 = [] -- line and plane are parallell
     | otherwise = [(d, l0 `plus` (l `scaledBy` d), n)]
   where
     ln = l `dot` n
     d = ((p0 `minus` l0) `dot` n) / ln
 
-lineDiscIntersection :: Line -> Vec3 -> Vec3 -> Double -> [(Double, Vec3, Vec3)]
+lineDiscIntersection :: Ray -> Vec3 -> Vec3 -> Double -> [(Double, Vec3, Vec3)]
 lineDiscIntersection l p0 n radius = filter inside $ linePlaneIntersection l p0 n
   where
     inside (_, hitPoint, _) = magnitude (hitPoint `minus` p0) <= radius
 
 -- https://en.wikipedia.org/wiki/Phong_reflection_model
-phong :: Line -> [Object] -> Vec3 -> Vec3 -> Material -> Light -> Color
+phong :: Ray -> [Object] -> Vec3 -> Vec3 -> Material -> Light -> Color
 phong ray objects surfacePoint surfaceNormal material light =
     case light of
         DirectionalLight dir lightColor ->
             let
-                shadow = case closestIntersection (Line (surfacePoint `plus` (surfaceNormal `scaledBy` 0.001)) (negate dir)) objects of
+                shadow = case closestIntersection (Ray (surfacePoint `plus` (surfaceNormal `scaledBy` 0.001)) (negate dir)) objects of
                     Just _ -> True
                     Nothing -> False
 
-                (Line _eye rayDir) = ray
+                (Ray _eye rayDir) = ray
                 l = negate dir
                 n = surfaceNormal
                 v = negate rayDir
