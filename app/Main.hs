@@ -35,22 +35,32 @@ w, h :: Int
 w = 600
 h = 600
 
-material1, material2, material3, materialPlane :: Material
+material0, material1, material2, material3, materialPlane :: Material
+material0 =
+    Material
+        { color = (1, 1, 1)
+        , specular = 1
+        , diffuse = 0.4
+        , shininess = 30
+        , reflectivity = 0.3
+        }
 material1 =
     Material
         { color = (1, 0.9, 0.4)
         , specular = 1
         , diffuse = 0.4
         , shininess = 30
+        , reflectivity = 0.1
         }
 material2 = material1{color = (0.8, 0.1, 1)}
 material3 = material1{color = (0.1, 1, 0.7)}
 materialPlane =
     Material
         { color = (0.8, 0.7, 0.1)
-        , specular = 1
+        , specular = 0.9
         , diffuse = 0.3
         , shininess = 3
+        , reflectivity = 0.1
         }
 
 myImage :: [Pxl]
@@ -59,12 +69,12 @@ myImage =
         Raytracer.Scene
             { camera =
                 Camera
-                    { eye = (4, 4, -4)
-                    , target = (0, 0, 0)
+                    { eye = (-0.8, 2, -4)
+                    , target = (0.0, 0.5, 1)
                     , fieldOfView = pi / 4 :: Double
                     , up = (0, 1, 0)
                     }
-            , background = (0, 0.1, 0)
+            , background = (0, 0.0, 0)
             , ambientLight = (0.0, 0.0, 0.0)
             , lights =
                 [ DirectionalLight (normalize (1, -3, 0.5)) (1, 1, 1)
@@ -72,10 +82,11 @@ myImage =
                 , DirectionalLight (normalize (2, -1, 1)) (1, 1, 0.5)
                 ]
             , objects =
-                [ Sphere (0, 0, 0) 0.6 material1
-                , Sphere (-1, 0.3, 0) 1 material2
-                , Sphere (1, -0.3, 0) 1 material3
-                , Disc (0, -1.2, 0) (normalize (0, 1, 0)) 3 materialPlane
+                [ Sphere (0, 1, 3.2) 2 material0
+                , -- , Sphere (0, 0, 0) 0.6 material1
+                  Sphere (-1, 0, 0) 1 material2
+                , Sphere (1, 0, 0) 1 material3
+                , Plane (0, -1, 0) (normalize (0, 1, 0)) materialPlane
                 ]
             }
 

@@ -43,8 +43,8 @@ data Material = Material
     { color :: Color
     , specular :: Double -- ks
     , diffuse :: Double -- kd
-    -- , ambient :: Double -- ka
     , shininess :: Double -- alpha
+    , reflectivity :: Double
     }
     deriving (Show)
 
@@ -58,6 +58,13 @@ data Scene = Scene
     deriving (Show)
 
 data Ray = Ray Vec3 Vec3 deriving (Show)
+
+data Hit = Hit
+    { object :: Object
+    , distance :: Double
+    , point :: Vec3
+    , normal :: Vec3
+    }
 
 renderScene :: Int -> Int -> Scene -> [Color]
 renderScene width height scene =
@@ -108,21 +115,37 @@ renderScene width height scene =
             y <- [1 .. m]
             x <- [1 .. k]
             let ray = Ray pE (normalize $ pij x y)
-            pure $ renderRay ray scene
+            pure $ renderRay ray scene 2
 
-renderRay :: Ray -> Scene -> Color
-renderRay ray scene =
+renderRay :: Ray -> Scene -> Int -> Color
+renderRay ray scene depth =
     case closestIntersection ray scene.objects of
         Nothing -> scene.background
         Just hit ->
             let
+                material = objMaterial hit.object
                 lightContrib :: Light -> Color
-                lightContrib = phong ray scene.objects hit.point hit.normal (objMaterial hit.object)
+                lightContrib = phong ray scene.objects hit.point hit.normal material
 
                 contributons :: [Color]
                 contributons = fmap lightContrib scene.lights
+
+                color = foldl' plus scene.ambientLight contributons
              in
-                foldl' plus scene.ambientLight contributons
+                if depth <= 0
+                    then color
+                    else
+                        let
+                            Ray _ v = ray
+                            n = hit.normal
+                            r = v `minus` (n `scaledBy` (2 * (v `dot` n)))
+                            p' = hit.point `plus` (n `scaledBy` 0.01)
+                            ray' = Ray p' r
+                            color' = renderRay ray' scene (depth - 1)
+
+                            reflection = material.reflectivity
+                         in
+                            (color `scaledBy` (1 - reflection)) `plus` (color' `scaledBy` reflection)
   where
     objMaterial (Sphere _ _ m) = m
     objMaterial (Plane _ _ m) = m
@@ -156,12 +179,6 @@ lineSphereIntersection (Ray o un) c r
     i2 = o `plus` (un `scaledBy` d2)
     n2 = normalize $ i2 `minus` c
 
-data Hit = Hit
-    { object :: Object
-    , distance :: Double
-    , point :: Vec3
-    , normal :: Vec3
-    }
 closestIntersection :: Ray -> [Object] -> Maybe Hit
 closestIntersection line objects =
     listToMaybe $
