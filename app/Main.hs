@@ -39,10 +39,10 @@ material0, material1, material2, material3, materialPlane :: Material
 material0 =
     Material
         { color = (1, 1, 1)
-        , specular = 1
-        , diffuse = 0.4
+        , specular = 0.4
+        , diffuse = 0.2
         , shininess = 30
-        , reflectivity = 0.3
+        , reflectivity = 0.6
         }
 material1 =
     Material

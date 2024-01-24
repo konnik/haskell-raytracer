@@ -145,7 +145,8 @@ renderRay ray scene depth =
 
                             reflection = material.reflectivity
                          in
-                            (color `scaledBy` (1 - reflection)) `plus` (color' `scaledBy` reflection)
+                            -- (color `scaledBy` (1 - reflection)) `plus` (color' `scaledBy` reflection)
+                            color `plus` (color' `scaledBy` reflection)
   where
     objMaterial (Sphere _ _ m) = m
     objMaterial (Plane _ _ m) = m
