@@ -69,9 +69,9 @@ myImage =
         Raytracer.Scene
             { camera =
                 Camera
-                    { eye = (-0.8, 2, -4)
+                    { eye = (-0.8, 2, -3)
                     , target = (0.0, 0.5, 1)
-                    , fieldOfView = pi / 4 :: Double
+                    , fieldOfView = pi / 2 :: Double
                     , up = (0, 1, 0)
                     }
             , background = (0, 0.0, 0)
