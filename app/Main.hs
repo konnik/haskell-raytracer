@@ -38,7 +38,7 @@ h = 600
 material0, material1, material2, material3, materialPlane :: Material
 material0 =
     Material
-        { color = (1, 1, 1)
+        { color = const (1, 1, 1)
         , specular = 0.4
         , diffuse = 0.2
         , shininess = 30
@@ -46,21 +46,21 @@ material0 =
         }
 material1 =
     Material
-        { color = (1, 0.9, 0.4)
+        { color = const (1, 0.9, 0.4)
         , specular = 1
         , diffuse = 0.4
         , shininess = 30
         , reflectivity = 0.1
         }
-material2 = material1{color = (0.8, 0.1, 1)}
-material3 = material1{color = (0.1, 1, 0.7)}
+material2 = material1{color = const (0.8, 0.1, 1)}
+material3 = material1{color = const (0.1, 1, 0.7)}
 materialPlane =
     Material
-        { color = (0.8, 0.7, 0.1)
+        { color = checkerBoard (0.8, 0.7, 0.1) (0.2, 0.17, 0.05) 4
         , specular = 0.9
-        , diffuse = 0.3
-        , shininess = 3
-        , reflectivity = 0.1
+        , diffuse = 0.5
+        , shininess = 30
+        , reflectivity = 0.3
         }
 
 myImage :: [Pxl]
@@ -69,12 +69,12 @@ myImage =
         Raytracer.Scene
             { camera =
                 Camera
-                    { eye = (-0.8, 2, -3)
+                    { eye = (-1.8, 3, -2)
                     , target = (0.0, 0.5, 1)
                     , fieldOfView = pi / 2 :: Double
                     , up = (0, 1, 0)
                     }
-            , background = (0, 0.0, 0)
+            , background = (0, 0, 0.8)
             , ambientLight = (0.0, 0.0, 0.0)
             , lights =
                 [ DirectionalLight (normalize (1, -3, 0.5)) (1, 1, 1)
@@ -87,6 +87,7 @@ myImage =
                   Sphere (-1, 0, 0) 1 material2
                 , Sphere (1, 0, 0) 1 material3
                 , Plane (0, -1, 0) (normalize (0, 1, 0)) materialPlane
+                --  Disc (0, -1, 0) (normalize (0, 1, 0)) 10 materialPlane
                 ]
             }
 

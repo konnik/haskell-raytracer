@@ -10,6 +10,7 @@ module Raytracer (
     Scene (..),
     Color,
     Material (..),
+    checkerBoard,
 ) where
 
 import Data.Function (on)
@@ -36,17 +37,15 @@ data Object
     = Sphere Vec3 Double Material
     | Plane Vec3 Vec3 Material
     | Disc Vec3 Vec3 Double Material
-    deriving (Show)
 
 -- https://en.wikipedia.org/wiki/Phong_reflection_model
 data Material = Material
-    { color :: Color
+    { color :: Vec3 -> Color
     , specular :: Double -- ks
     , diffuse :: Double -- kd
     , shininess :: Double -- alpha
     , reflectivity :: Double
     }
-    deriving (Show)
 
 data Scene = Scene
     { camera :: Camera
@@ -55,7 +54,6 @@ data Scene = Scene
     , lights :: [Light]
     , objects :: [Object]
     }
-    deriving (Show)
 
 data Ray = Ray Vec3 Vec3 deriving (Show)
 
@@ -64,7 +62,18 @@ data Hit = Hit
     , distance :: Double
     , point :: Vec3
     , normal :: Vec3
+    , uv :: Vec3
     }
+
+checkerBoard :: Color -> Color -> Double -> Vec3 -> Color
+checkerBoard color1 color2 scale (u, v, _) =
+    let
+        x = even (round (u / scale) `mod` (2 :: Int))
+        y = even (round (v / scale) `mod` (2 :: Int))
+     in
+        if (x && not y) || (not x && y)
+            then color1
+            else color2
 
 renderScene :: Int -> Int -> Scene -> [Color]
 renderScene width height scene =
@@ -120,12 +129,19 @@ renderScene width height scene =
 renderRay :: Ray -> Scene -> Int -> Color
 renderRay ray scene depth =
     case closestIntersection ray scene.objects of
-        Nothing -> scene.background
+        Nothing ->
+            let
+                -- color = scene.background
+                -- just hardcode some gradient
+                Ray _ (_, y, _) = ray
+                color = scene.background `scaledBy` (1 - 2 * y)
+             in
+                color
         Just hit ->
             let
                 material = objMaterial hit.object
                 lightContrib :: Light -> Color
-                lightContrib = phong ray scene.objects hit.point hit.normal material
+                lightContrib = phong ray scene.objects hit.point hit.normal hit.uv material
 
                 contributons :: [Color]
                 contributons = fmap lightContrib scene.lights
@@ -162,14 +178,21 @@ findIntersection line obj =
         Plane center normal _ -> hitObject <$> linePlaneIntersection line center normal
         Disc center normal radius _ -> hitObject <$> lineDiscIntersection line center normal radius
   where
-    hitObject (d, i, n) = Hit obj d i n
+    hitObject (d, i, n, uv) =
+        Hit
+            { object = obj
+            , distance = d
+            , point = i
+            , normal = n
+            , uv = uv
+            }
 
 -- https://en.wikipedia.org/wiki/Line%E2%80%93sphere_intersection
-lineSphereIntersection :: Ray -> Vec3 -> Double -> [(Double, Vec3, Vec3)]
+lineSphereIntersection :: Ray -> Vec3 -> Double -> [(Double, Vec3, Vec3, Vec3)]
 lineSphereIntersection (Ray o un) c r
     | delta < 0 = []
-    | delta > 0 = [(d1, i1, n1), (d2, i2, n2)] -- two intersections
-    | otherwise = [(d1, i1, n1)] -- one intersection
+    | delta > 0 = [(d1, i1, n1, uv1), (d2, i2, n2, uv2)] -- two intersections
+    | otherwise = [] -- one intersection, just ignore it
   where
     a = un `dot` (o `minus` c)
     b = magnitude (o `minus` c)
@@ -177,9 +200,11 @@ lineSphereIntersection (Ray o un) c r
     d1 = -a - sqrt delta
     i1 = o `plus` (un `scaledBy` d1)
     n1 = normalize $ i1 `minus` c
+    uv1 = (0, 0, 0) -- todo calc uv
     d2 = -a + sqrt delta
     i2 = o `plus` (un `scaledBy` d2)
     n2 = normalize $ i2 `minus` c
+    uv2 = (0, 0, 0) -- todo calc uv
 
 closestIntersection :: Ray -> [Object] -> Maybe Hit
 closestIntersection line objects =
@@ -191,22 +216,27 @@ closestIntersection line objects =
     positiveDistance hit = hit.distance > 0
 
 -- https://en.wikipedia.org/wiki/Line%E2%80%93plane_intersection
-linePlaneIntersection :: Ray -> Vec3 -> Vec3 -> [(Double, Vec3, Vec3)]
+linePlaneIntersection :: Ray -> Vec3 -> Vec3 -> [(Double, Vec3, Vec3, Vec3)]
 linePlaneIntersection (Ray l0 l) p0 n
     | ln == 0 = [] -- line and plane are parallell
-    | otherwise = [(d, l0 `plus` (l `scaledBy` d), n)]
+    | otherwise = [(d, i, n, uv)]
   where
     ln = l `dot` n
     d = ((p0 `minus` l0) `dot` n) / ln
+    i = l0 `plus` (l `scaledBy` d)
+    p1 = i `minus` p0
+    u = p1 `dot` (1, 0, 0) -- todo fix this
+    v = p1 `dot` (0, 0, 1) -- hardcoded mess...
+    uv = (u, v, 0)
 
-lineDiscIntersection :: Ray -> Vec3 -> Vec3 -> Double -> [(Double, Vec3, Vec3)]
+lineDiscIntersection :: Ray -> Vec3 -> Vec3 -> Double -> [(Double, Vec3, Vec3, Vec3)]
 lineDiscIntersection l p0 n radius = filter inside $ linePlaneIntersection l p0 n
   where
-    inside (_, hitPoint, _) = magnitude (hitPoint `minus` p0) <= radius
+    inside (_, hitPoint, _, _) = magnitude (hitPoint `minus` p0) <= radius
 
 -- https://en.wikipedia.org/wiki/Phong_reflection_model
-phong :: Ray -> [Object] -> Vec3 -> Vec3 -> Material -> Light -> Color
-phong ray objects surfacePoint surfaceNormal material light =
+phong :: Ray -> [Object] -> Vec3 -> Vec3 -> Vec3 -> Material -> Light -> Color
+phong ray objects surfacePoint surfaceNormal uv material light =
     case light of
         DirectionalLight dir lightColor ->
             let
@@ -231,6 +261,8 @@ phong ray objects surfacePoint surfaceNormal material light =
                     if specularDot > 0 && diffuseDot > 0 && not shadow
                         then material.specular * (specularDot ** material.shininess)
                         else 0
+
+                color = material.color uv
              in
-                hadamard material.color (lightColor `scaledBy` diffuse)
+                hadamard color (lightColor `scaledBy` diffuse)
                     `plus` (lightColor `scaledBy` specular)
